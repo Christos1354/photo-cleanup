@@ -389,17 +389,32 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
 <div class="wrap">
 
+  <div class="panel" id="resumeSessionPanel" style="display:none; text-align:center;">
+    <h3 style="margin-top:0;">📂 Αποθηκευμένες σαρώσεις</h3>
+    <p style="color:var(--text-dim); margin-top:-6px;">Κάθε φάκελος που έχεις σαρώσει μένει εδώ ξεχωριστά, μέχρι να τον σβήσεις εσύ.</p>
+    <div id="savedSessionsList" style="display:flex; flex-direction:column; gap:10px; margin-top:14px; max-width:600px; margin-left:auto; margin-right:auto;"></div>
+    <div style="margin-top:16px;">
+      <button class="ghost-btn" id="newScanInsteadBtn">🔄 Σάρωση νέου φακέλου</button>
+    </div>
+  </div>
+
   <div class="center" id="pickArea">
     <div class="mode-buttons">
       <button class="mode-btn active" id="modePhotosBtn">📷 Φωτογραφίες</button>
       <button class="mode-btn" id="modeDocsBtn">📄 Έγγραφα</button>
       <button class="mode-btn" id="modeAllBtn">🗂️ Όλα τα αρχεία</button>
     </div>
+    <div style="margin-bottom:10px;">
+      <button class="ghost-btn" id="showSavedListBtn" style="font-size:14px; padding:8px 14px;">📂 Αποθηκευμένες σαρώσεις αυτής της καρτέλας</button>
+    </div>
     <div>
       <button class="big-button" id="pickBtn">📁 Επίλεξε τον φάκελο με τις φωτογραφίες σου</button>
     </div>
     <div class="drop-hint" id="unsupportedMsg" style="display:none; color:var(--danger);">
       Ο browser σου δεν υποστηρίζει αυτή τη λειτουργία. Άνοιξε αυτή τη σελίδα στο Google Chrome (τελευταία έκδοση).
+    </div>
+    <div class="drop-hint" style="color:var(--text-dim); font-size:14px; max-width:520px; margin:10px auto 0;">
+      💡 Σημείωση: για λόγους ασφαλείας ο browser δεν επιτρέπει να διαλέξεις απευθείας τον φάκελο «Λήψεις», «Επιφάνεια Εργασίας» ή «Έγγραφα». Αν οι φωτογραφίες σου είναι εκεί, διάλεξε έναν υποφάκελο μέσα του ή τον φάκελο του χρήστη σου.
     </div>
   </div>
 
@@ -564,6 +579,7 @@ const BLOCKED_FOLDER_NAMES = ['system','system32','library','windows','program f
 const BLOCKED_EXT = ['exe','dll','sys','app','framework','bat','cmd','com','msi','ini','plist','dylib','so','bundle'];
 
 let currentMode = 'photos';
+let currentRootHandle = null;
 let allResults = [];
 let skippedMeta = 0;
 let skippedVideo = 0;
@@ -589,6 +605,147 @@ if (!window.showDirectoryPicker) {
   pickBtn.disabled = true;
   document.getElementById('unsupportedMsg').style.display = 'block';
 }
+
+/* ============ Αποθήκευση/Επαναφορά σαρώσεων (IndexedDB) ============
+   Κάθε φάκελος που σαρώνεται σε κάθε καρτέλα (Φωτογραφίες/Έγγραφα/Όλα)
+   αποθηκεύεται ΞΕΧΩΡΙΣΤΑ και μόνιμα. Ένας νέος φάκελος δεν σβήνει τους
+   προηγούμενους — μένουν όλοι, μέχρι να τους διαγράψεις εσύ έναν-έναν.
+   Η διαγραφή αφορά ΜΟΝΟ τη μνήμη του προγράμματος, ποτέ τα πραγματικά αρχεία. */
+const SESSION_DB_NAME = 'photocleanup-sessions';
+const SESSION_STORE = 'sessions';
+
+function openSessionDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(SESSION_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(SESSION_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function sessionKey(mode, folderName){ return mode + '::' + folderName; }
+
+async function saveSessionToDB(rootHandle){
+  try {
+    const db = await openSessionDB();
+    const tx = db.transaction(SESSION_STORE, 'readwrite');
+    tx.objectStore(SESSION_STORE).put({
+      rootHandle, mode: currentMode, folderName: rootHandle.name,
+      allResults, dupGroups, blurItems, smallItems,
+      emptyCount, skippedMeta, skippedVideo, unsupportedCount,
+      savedAt: Date.now()
+    }, sessionKey(currentMode, rootHandle.name));
+    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+  } catch(e){ /* αν αποτύχει η αποθήκευση, δεν πειράζει — απλά δεν θα υπάρχει επαναφορά */ }
+}
+
+async function listSessionsForMode(mode){
+  try {
+    const db = await openSessionDB();
+    const tx = db.transaction(SESSION_STORE, 'readonly');
+    const all = await new Promise((res) => {
+      const req = tx.objectStore(SESSION_STORE).getAll();
+      req.onsuccess = () => res(req.result || []);
+      req.onerror = () => res([]);
+    });
+    return all.filter(s => s.mode === mode).sort((a,b) => b.savedAt - a.savedAt);
+  } catch(e){ return []; }
+}
+
+async function deleteSessionEntry(mode, folderName){
+  try {
+    const db = await openSessionDB();
+    const tx = db.transaction(SESSION_STORE, 'readwrite');
+    tx.objectStore(SESSION_STORE).delete(sessionKey(mode, folderName));
+    await new Promise((res) => { tx.oncomplete = res; tx.onerror = res; });
+  } catch(e){ /* ok */ }
+}
+
+function formatSavedDate(ts){
+  const d = new Date(ts);
+  return d.toLocaleString('el-GR', { day:'numeric', month:'long', hour:'2-digit', minute:'2-digit' });
+}
+
+/* Ζητάει άδεια πρόσβασης στον φάκελο ενός συγκεκριμένου αποθηκευμένου σκαν
+   και, αν δοθεί, γεμίζει τις μεταβλητές με τα αποτελέσματά του.
+   ΠΡΕΠΕΙ να καλείται μέσα σε πραγματικό click χρήστη. */
+async function tryRestoreSpecificSession(s){
+  try {
+    const perm = await s.rootHandle.queryPermission({ mode: 'readwrite' });
+    const granted = perm === 'granted' ? true :
+      (await s.rootHandle.requestPermission({ mode: 'readwrite' })) === 'granted';
+    if (!granted) return false;
+  } catch(e){ return false; }
+  currentRootHandle = s.rootHandle;
+  allResults = s.allResults; dupGroups = s.dupGroups; blurItems = s.blurItems; smallItems = s.smallItems;
+  emptyCount = s.emptyCount; skippedMeta = s.skippedMeta; skippedVideo = s.skippedVideo; unsupportedCount = s.unsupportedCount;
+  document.getElementById('folderNameLabel').textContent = `— φάκελος: "${s.folderName}"`;
+  modeState[s.mode] = {
+    allResults, dupGroups, blurItems, smallItems,
+    emptyCount, skippedMeta, skippedVideo, unsupportedCount,
+    selected: new Set(), folderLabel: document.getElementById('folderNameLabel').textContent
+  };
+  return true;
+}
+
+/* Χτίζει και δείχνει τη λίστα με όλες τις αποθηκευμένες σαρώσεις της τρέχουσας καρτέλας. */
+async function renderSavedSessionsList(){
+  const sessions = await listSessionsForMode(currentMode);
+  const listEl = document.getElementById('savedSessionsList');
+  listEl.innerHTML = '';
+  if (!sessions.length){
+    listEl.innerHTML = '<p style="color:var(--text-dim);">Δεν υπάρχει καμία αποθηκευμένη σάρωση ακόμη σε αυτή την καρτέλα.</p>';
+  } else {
+    sessions.forEach(s => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--panel-2); border-radius:12px; padding:12px 16px; text-align:left;';
+      row.innerHTML = `
+        <div>
+          <div style="font-weight:600;">📁 ${s.folderName}</div>
+          <div style="color:var(--text-dim); font-size:14px;">${s.allResults.length} αρχεία — ${formatSavedDate(s.savedAt)}</div>
+        </div>
+        <div style="display:flex; gap:8px; flex-shrink:0;">
+          <button class="ghost-btn open-saved-btn" style="padding:8px 14px;">▶️ Άνοιγμα</button>
+          <button class="ghost-btn del-saved-btn" style="padding:8px 10px; border-color:var(--danger); color:var(--danger);" title="Διαγραφή">🗑️</button>
+        </div>`;
+      row.querySelector('.open-saved-btn').addEventListener('click', async () => {
+        const ok = await tryRestoreSpecificSession(s);
+        if (!ok){
+          alert('Δεν ήταν δυνατή η πρόσβαση σε αυτόν τον φάκελο (ίσως δεν δόθηκε άδεια ή ο φάκελος μετακινήθηκε/διαγράφηκε). Δοκίμασε νέα σάρωση.');
+          return;
+        }
+        document.getElementById('resumeSessionPanel').style.display = 'none';
+        renderAll();
+        summaryPanel.style.display = 'block';
+        actionBar.style.display = 'flex';
+        switchTab('dup');
+      });
+      row.querySelector('.del-saved-btn').addEventListener('click', async () => {
+        if (!confirm(`Να διαγραφεί η αποθηκευμένη σάρωση του φακέλου «${s.folderName}»;\n\nΔΕΝ θα διαγραφούν τα πραγματικά σου αρχεία — μόνο η μνήμη αυτής της σάρωσης.`)) return;
+        await deleteSessionEntry(s.mode, s.folderName);
+        renderSavedSessionsList();
+      });
+      listEl.appendChild(row);
+    });
+  }
+  document.getElementById('resumeSessionPanel').style.display = 'block';
+}
+
+document.getElementById('newScanInsteadBtn').addEventListener('click', () => {
+  document.getElementById('resumeSessionPanel').style.display = 'none';
+});
+
+document.getElementById('showSavedListBtn').addEventListener('click', () => {
+  renderSavedSessionsList();
+});
+
+/* Στη φόρτωση της σελίδας, δείξε τη λίστα αν υπάρχει κάτι αποθηκευμένο για την αρχική καρτέλα. */
+(async () => {
+  const sessions = await listSessionsForMode(currentMode);
+  if (sessions.length) await renderSavedSessionsList();
+})();
 
 document.getElementById('modePhotosBtn').addEventListener('click', () => setMode('photos'));
 document.getElementById('modeDocsBtn').addEventListener('click', () => setMode('docs'));
@@ -620,7 +777,7 @@ function loadModeState(mode){
   document.getElementById('folderNameLabel').textContent = s.folderLabel;
 }
 
-function setMode(mode){
+async function setMode(mode){
   saveModeState(currentMode);
   currentMode = mode;
   loadModeState(mode);
@@ -637,6 +794,16 @@ function setMode(mode){
   document.getElementById('tabBtnBlur').style.display = mode==='photos' ? '' : 'none';
   document.getElementById('tabBtnSmall').style.display = mode==='photos' ? '' : 'none';
 
+  if (!allResults.length){
+    /* Τίποτα στη μνήμη αυτής της συνεδρίας για αυτή την καρτέλα — δείξε τη
+       λίστα με τις αποθηκευμένες σαρώσεις αυτής της καρτέλας, αν υπάρχουν. */
+    const sessions = await listSessionsForMode(mode);
+    if (sessions.length) await renderSavedSessionsList();
+    else document.getElementById('resumeSessionPanel').style.display = 'none';
+  } else {
+    document.getElementById('resumeSessionPanel').style.display = 'none';
+  }
+
   if (allResults.length){
     renderAll();
     summaryPanel.style.display = 'block';
@@ -649,14 +816,21 @@ function setMode(mode){
 
 pickBtn.addEventListener('click', pickFolder);
 document.getElementById('homeResetBtn').addEventListener('click', () => {
-  window.location.href = '%CE%A4%CE%B1%20%CE%A0%CF%81%CE%BF%CE%B3%CF%81%CE%AC%CE%BC%CE%BC%CE%B1%CF%84%CE%AC%20%CE%BC%CE%BF%CF%85.html';
+  window.location.href = 'index.html';
 });
 
 async function pickFolder(){
   let handle;
   try {
     handle = await window.showDirectoryPicker({mode:'readwrite'});
-  } catch(e){ return; }
+  } catch(e){
+    if (e && e.name === 'AbortError'){
+      alert('Δεν επιλέχθηκε φάκελος.\n\nΑν προσπάθησες να επιλέξεις απευθείας τον φάκελο «Λήψεις», «Επιφάνεια Εργασίας» ή «Έγγραφα», ο browser (Chrome/Safari) δεν επιτρέπει την απευθείας επιλογή αυτών των φακέλων για λόγους ασφαλείας — δεν είναι πρόβλημα του προγράμματος.\n\nΛύση: μπες μέσα σε εκείνον τον φάκελο και διάλεξε έναν υποφάκελο μέσα του (π.χ. δημιούργησε έναν φάκελο "Φωτογραφίες" μέσα στις Λήψεις και βάλε εκεί τα αρχεία σου), ή επίλεξε απευθείας τον φάκελο του χρήστη σου (Home).');
+    }
+    return;
+  }
+  currentRootHandle = handle;
+  document.getElementById('resumeSessionPanel').style.display = 'none';
   document.getElementById('folderNameLabel').textContent = `— φάκελος: "${handle.name}"`;
 
   allResults = []; skippedMeta = 0; skippedVideo = 0; unsupportedCount = 0; emptyCount = 0;
@@ -694,6 +868,7 @@ async function pickFolder(){
   summaryPanel.style.display = 'block';
   actionBar.style.display = 'flex';
   switchTab('dup');
+  saveSessionToDB(handle);
 }
 
 async function collectEntries(dirHandle, path=''){
@@ -1268,6 +1443,7 @@ document.getElementById('deleteBtn').addEventListener('click', async () => {
   }
   computeGroups();
   renderAll();
+  if (currentRootHandle) saveSessionToDB(currentRootHandle);
 
   let msg = `Διαγράφηκαν ${done} στοιχεία.`;
   if (failedItems.length){
@@ -1318,6 +1494,7 @@ document.getElementById('moveBtn').addEventListener('click', async () => {
   }
   computeGroups();
   renderAll();
+  if (currentRootHandle) saveSessionToDB(currentRootHandle);
 
   let msg = `Μετακινήθηκαν ${done} στοιχεία.`;
   if (failedItems.length){

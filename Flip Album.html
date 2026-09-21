@@ -98,12 +98,13 @@
     border:none; border-radius:8px; width:26px; height:26px; font-size:14px; cursor:pointer;
   }
 
-  #albumScreen{ display:none; height:100vh; flex-direction:column; }
+  #albumScreen{ display:none; height:100%; flex-direction:column; }
   #toolbar{
     background:var(--chrome-panel);
     display:flex; align-items:center; gap:14px;
     padding:12px 18px; flex-wrap:wrap;
     border-bottom:2px solid var(--chrome-panel-2);
+    flex-shrink:0;
   }
   #sectionPills{ display:flex; gap:8px; overflow-x:auto; flex:1; min-width:120px; }
   .pill{
@@ -126,10 +127,13 @@
     flex:1; position:relative; background:var(--chrome-bg);
     display:flex; align-items:center; justify-content:center;
     padding:20px;
+    overflow:auto;
+    min-height:0;
   }
   #pageArea{
     position:relative; width:100%; max-width:1250px; height:100%; max-height:800px;
     perspective:1800px;
+    min-height:340px;
   }
   .page{
     position:absolute; inset:0;
@@ -137,6 +141,7 @@
     box-shadow:0 20px 50px rgba(0,0,0,.5);
     padding:22px; display:grid; gap:14px;
     transition:transform .38s ease, opacity .38s ease;
+    overflow:auto;
   }
   .page.hidden{ opacity:0; pointer-events:none; }
   .page.enter-next{ transform:rotateY(24deg) scale(.96); opacity:0; }
@@ -1179,7 +1184,7 @@ async function deletePhoto(entryInfo){
 document.getElementById('backBtn').addEventListener('click', () => {
   stopSlideshow();
   bgMusic.pause();
-  window.location.href = '%CE%A4%CE%B1%20%CE%A0%CF%81%CE%BF%CE%B3%CF%81%CE%AC%CE%BC%CE%BC%CE%B1%CF%84%CE%AC%20%CE%BC%CE%BF%CF%85.html';
+  window.location.href = 'index.html';
 });
 
 document.getElementById('musicToggleBtn').addEventListener('click', () => {
