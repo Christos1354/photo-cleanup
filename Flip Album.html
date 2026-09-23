@@ -131,9 +131,9 @@
     min-height:0;
   }
   #pageArea{
-    position:relative; width:100%; max-width:1250px; height:100%; max-height:82vh;
+    position:relative; width:100%; max-width:1250px; height:100%; max-height:800px;
     perspective:1800px;
-    min-height:0;
+    min-height:340px;
   }
   .page{
     position:absolute; inset:0;
@@ -214,6 +214,7 @@
 
 <div id="coverScreen">
 <div id="coverInner">
+  <button id="coverHomeBtn" title="Επιστροφή στην αρχική σελίδα" style="position:absolute; top:14px; left:14px; z-index:30; background:var(--chrome-panel-2); color:var(--cream); border:none; border-radius:10px; width:42px; height:42px; font-size:19px; cursor:pointer; display:flex; align-items:center; justify-content:center;">🏠</button>
   <div class="lang-toggle-corner">
     <button class="lang-btn active" data-lang="el">ΕΛ</button>
     <button class="lang-btn" data-lang="en">EN</button>
@@ -346,23 +347,7 @@ const translations = {
     noPhotosAnymore: 'Δεν βρέθηκαν πια φωτογραφίες σε αυτόν τον φάκελο.',
     removeFromList: 'Αφαίρεση από τη λίστα',
     otherPhotos: 'Λοιπές φωτογραφίες',
-    defaultAlbumName: 'Φωτογραφίες',
-    personLabel: 'Πρόσωπο',
-    groupByPerson: '🧑 Ομαδοποίηση ανά πρόσωπο',
-    groupByPersonBack: '📁 Επιστροφή σε φακέλους',
-    faceGroupLoadingModels: 'Κατεβάζω τα μοντέλα αναγνώρισης προσώπων (μία φορά)…',
-    faceGroupProcessing: (i,total) => `Επεξεργάζομαι φωτογραφία ${i} από ${total}…`,
-    faceGroupNoFaces: 'Δεν βρέθηκαν πρόσωπα σε αυτές τις φωτογραφίες.',
-    faceGroupError: 'Κάτι δεν πήγε καλά. Έλεγξε τη σύνδεση στο ίντερνετ και δοκίμασε ξανά.',
-    renamePersonPrompt: 'Νέο όνομα για αυτή την ομάδα:',
-    renamePersonHint: 'Πάτησε για να αλλάξεις το όνομα',
-    deletePersonGroup: '🗑️ Διαγραφή αυτού του προσώπου',
-    deletePersonGroupConfirm: name => `Να διαγραφεί η ομάδα «${name}»; Οι φωτογραφίες σου δεν διαγράφονται — μόνο η ομαδοποίηση.`,
-    minPhotosLabel: 'Ελάχιστες φωτογραφίες ανά άτομο:',
-    myPeopleBtn: '👤 Τα Άτομά μου',
-    myPeopleEmpty: 'Δεν έχεις δώσει ακόμα όνομα σε κανέναν. Άνοιξε «Ομαδοποίηση ανά πρόσωπο» και μετονόμασε μια ομάδα.',
-    deleteNamedPersonConfirm: name => `Να διαγραφεί ο/η «${name}» από τη λίστα Ατόμων; Οι φωτογραφίες δεν διαγράφονται.`,
-    groupByPersonThisFolder: n => `🧑 Ομαδοποίηση προσώπων σε αυτόν τον φάκελο (${n} φωτό)`
+    defaultAlbumName: 'Φωτογραφίες'
   },
   en: {
     subtitle: 'Your own digital photo album — with music, sections, and pages that turn like a real book.',
@@ -395,23 +380,7 @@ const translations = {
     noPhotosAnymore: 'No photos found in this folder anymore.',
     removeFromList: 'Remove from list',
     otherPhotos: 'Other photos',
-    defaultAlbumName: 'Photos',
-    personLabel: 'Person',
-    groupByPerson: '🧑 Group by person',
-    groupByPersonBack: '📁 Back to folders',
-    faceGroupLoadingModels: 'Downloading face-recognition models (one time)…',
-    faceGroupProcessing: (i,total) => `Processing photo ${i} of ${total}…`,
-    faceGroupNoFaces: 'No faces were found in these photos.',
-    faceGroupError: 'Something went wrong. Check your internet connection and try again.',
-    renamePersonPrompt: 'New name for this group:',
-    renamePersonHint: 'Click to rename',
-    deletePersonGroup: '🗑️ Delete this person',
-    deletePersonGroupConfirm: name => `Delete the group "${name}"? Your photos won't be deleted — only the grouping.`,
-    minPhotosLabel: 'Minimum photos per person:',
-    myPeopleBtn: '👤 My People',
-    myPeopleEmpty: 'You haven\'t named anyone yet. Open "Group by person" and rename a group.',
-    deleteNamedPersonConfirm: name => `Remove "${name}" from your People list? Photos won't be deleted.`,
-    groupByPersonThisFolder: n => `🧑 Group faces in this folder (${n} photos)`
+    defaultAlbumName: 'Photos'
   }
 };
 let currentLang = localStorage.getItem('flipAlbumLang') || 'el';
@@ -438,8 +407,6 @@ function applyStaticTranslations(){
   document.getElementById('txtPerPageLabel').textContent = t('perPageLabel');
   document.documentElement.lang = currentLang;
   loadRecentAlbums();
-  const gbpBtn = document.getElementById('groupByPersonBtn');
-  if (gbpBtn) gbpBtn.textContent = groupByPersonActive ? t('groupByPersonBack') : t('groupByPerson');
   if (allPages.length && albumScreen.style.display === 'flex'){
     document.getElementById('pageIndicator').textContent = t('pageIndicator', currentPageIndex+1, allPages.length, allPages[currentPageIndex].sectionName);
   }
@@ -523,69 +490,12 @@ const BLOCKED_FOLDER_NAMES = ['system','system32','library','windows','program f
 
 const DB_NAME = 'flipAlbumDB';
 const STORE_NAME = 'albums';
-const FACE_STORE_NAME = 'faceGroups';
-const PEOPLE_STORE_NAME = 'namedPeople';
 function openDB(){
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 3);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, {keyPath:'id'});
-      if (!db.objectStoreNames.contains(FACE_STORE_NAME)) db.createObjectStore(FACE_STORE_NAME, {keyPath:'id'});
-      if (!db.objectStoreNames.contains(PEOPLE_STORE_NAME)) db.createObjectStore(PEOPLE_STORE_NAME, {keyPath:'id'});
-    };
-    req.onblocked = () => reject(new Error('db-blocked'));
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore(STORE_NAME, {keyPath:'id'}); };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
-  });
-}
-async function getNamedPeople(albumId){
-  try {
-    const db = await openDB();
-    return await new Promise((resolve) => {
-      const tx = db.transaction(PEOPLE_STORE_NAME, 'readonly');
-      const req = tx.objectStore(PEOPLE_STORE_NAME).getAll();
-      req.onsuccess = () => resolve((req.result || []).filter(p => p.albumId === albumId));
-      req.onerror = () => resolve([]);
-    });
-  } catch(e){ return []; }
-}
-async function setNamedPerson(record){
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(PEOPLE_STORE_NAME, 'readwrite');
-    tx.objectStore(PEOPLE_STORE_NAME).put(record);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-async function deleteNamedPerson(id){
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(PEOPLE_STORE_NAME, 'readwrite');
-    tx.objectStore(PEOPLE_STORE_NAME).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-async function getFaceGroupCache(cacheId){
-  try {
-    const db = await openDB();
-    return await new Promise((resolve) => {
-      const tx = db.transaction(FACE_STORE_NAME, 'readonly');
-      const req = tx.objectStore(FACE_STORE_NAME).get(cacheId);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => resolve(null);
-    });
-  } catch(e){ return null; }
-}
-async function setFaceGroupCache(record){
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(FACE_STORE_NAME, 'readwrite');
-    tx.objectStore(FACE_STORE_NAME).put(record);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
   });
 }
 async function dbGetAll(){
@@ -731,9 +641,6 @@ let currentMusicHandle = null;
 let currentAlbumRecord = null;
 let lastAction = null;
 let frameEnabled = true;
-let folderSections = null;
-let groupByPersonActive = false;
-let faceApiLoaded = false;
 
 const coverScreen = document.getElementById('coverScreen');
 const albumScreen = document.getElementById('albumScreen');
@@ -932,130 +839,8 @@ function buildPages(){
   sectionStartPage = {};
   sections.forEach(sec => {
     sectionStartPage[sec.name] = allPages.length;
-    const chunks = groupByPersonActive ? [sec.photos] : paginate(sec.photos, perPage);
+    const chunks = paginate(sec.photos, perPage);
     chunks.forEach(chunk => allPages.push({sectionName: sec.name, photos: chunk}));
-  });
-}
-
-function loadScriptOnce(src){
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)){ resolve(); return; }
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('load-failed'));
-    document.head.appendChild(s);
-  });
-}
-
-async function ensureFaceApi(statusEl){
-  if (faceApiLoaded) return;
-  if (statusEl) statusEl.textContent = t('faceGroupLoadingModels');
-  if (!window.faceapi){
-    await loadScriptOnce('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js');
-  }
-  const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
-  await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
-  await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-  await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-  faceApiLoaded = true;
-}
-
-async function getDetectionCanvas(entryInfo, maxDim){
-  maxDim = maxDim || 800;
-  try {
-    const file = await entryInfo.handle.getFile();
-    const blob = await toDisplayableBlob(file, entryInfo.name);
-    if (!blob) return null;
-    const bitmap = await createImageBitmap(blob);
-    let w = bitmap.width, h = bitmap.height;
-    if (w > maxDim || h > maxDim){
-      const scale = maxDim / Math.max(w,h);
-      w = Math.round(w*scale); h = Math.round(h*scale);
-    }
-    const c = document.createElement('canvas');
-    c.width = w; c.height = h;
-    c.getContext('2d').drawImage(bitmap, 0, 0, w, h);
-    bitmap.close();
-    return c;
-  } catch(e){ return null; }
-}
-
-const FACE_CLUSTER_THRESHOLD = 0.5;
-function addFaceToClusters(clusters, face){
-  // Average-linkage: compare against the average distance to a cluster's
-  // members, not the single hardest match — recognizes the same person
-  // across lighting/angle differences without being too loose either.
-  let bestIdx = -1, bestAvgDist = Infinity;
-  clusters.forEach((c,i) => {
-    let sum = 0;
-    c.items.forEach(item => { sum += faceapi.euclideanDistance(face.descriptor, item.descriptor); });
-    const avg = sum / c.items.length;
-    if (avg < bestAvgDist){ bestAvgDist = avg; bestIdx = i; }
-  });
-  if (bestIdx !== -1 && bestAvgDist < FACE_CLUSTER_THRESHOLD){
-    clusters[bestIdx].items.push(face);
-  } else {
-    clusters.push({items:[face]});
-  }
-}
-
-function withTimeout(promise, ms){
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
-  ]);
-}
-
-async function computePersonSections(statusEl, photosList){
-  await ensureFaceApi(statusEl);
-  const allPhotos = photosList || [];
-  const MIN_FACE_SIZE = 55; // px, on an 800px-max photo — skip tiny/distant faces that confuse matching
-  const clusters = [];
-  for (let i = 0; i < allPhotos.length; i++){
-    if (statusEl) statusEl.textContent = t('faceGroupProcessing', i+1, allPhotos.length);
-    const entryInfo = allPhotos[i];
-    try {
-      const canvas = await withTimeout(getDetectionCanvas(entryInfo), 20000);
-      if (!canvas) continue;
-      const detections = await withTimeout(
-        faceapi
-          .detectAllFaces(canvas, new faceapi.SsdMobilenetv1Options({minConfidence: 0.5}))
-          .withFaceLandmarks()
-          .withFaceDescriptors(),
-        20000
-      );
-      detections
-        .filter(det => det.detection.box.width >= MIN_FACE_SIZE && det.detection.box.height >= MIN_FACE_SIZE)
-        .forEach(det => {
-          const box = det.detection.box;
-          const relBox = {
-            x: box.x / canvas.width,
-            y: box.y / canvas.height,
-            width: box.width / canvas.width,
-            height: box.height / canvas.height
-          };
-          addFaceToClusters(clusters, {descriptor: det.descriptor, entryInfo, relBox});
-        });
-    } catch(e){ /* this photo timed out or failed — skip it and keep going */ }
-    // let the page breathe every few photos so the tab doesn't freeze
-    if (i % 5 === 4) await new Promise(r => setTimeout(r, 0));
-  }
-  clusters.sort((a,b) => b.items.length - a.items.length);
-  return clusters.map(c => {
-    const photos = [];
-    const faceBoxes = {};
-    c.items.forEach(item => {
-      if (photos.indexOf(item.entryInfo) === -1){
-        photos.push(item.entryInfo);
-        faceBoxes[item.entryInfo.path] = item.relBox;
-      }
-    });
-    const dim = c.items[0].descriptor.length;
-    const avgDescriptor = new Array(dim).fill(0);
-    c.items.forEach(item => { for (let k=0;k<dim;k++) avgDescriptor[k] += item.descriptor[k]; });
-    for (let k=0;k<dim;k++) avgDescriptor[k] /= c.items.length;
-    return {photos, faceBoxes, avgDescriptor};
   });
 }
 
@@ -1072,32 +857,6 @@ function renderSectionPills(){
       renderPage(currentPageIndex, null);
     });
     wrap.appendChild(pill);
-    if (groupByPersonActive){
-      const miniBtnStyle = 'background:var(--chrome-panel-2);color:var(--cream-dim);border:2px solid transparent;border-radius:999px;padding:8px 10px;font-size:14px;line-height:1;cursor:pointer;flex-shrink:0;';
-      const renameBtn = document.createElement('button');
-      renameBtn.textContent = '✏️';
-      renameBtn.title = t('renamePersonHint');
-      renameBtn.style.cssText = miniBtnStyle;
-      renameBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const newName = prompt(t('renamePersonPrompt'), sec.name);
-        if (!newName || !newName.trim()) return;
-        await renamePersonSection(sec, newName.trim());
-      });
-      wrap.appendChild(renameBtn);
-
-      const delBtn = document.createElement('button');
-      delBtn.textContent = '🗑️';
-      delBtn.title = t('deletePersonGroup');
-      delBtn.style.cssText = miniBtnStyle;
-      delBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (confirm(t('deletePersonGroupConfirm', sec.name))){
-          deletePersonGroup(sec.name);
-        }
-      });
-      wrap.appendChild(delBtn);
-    }
   });
   updateActivePill();
 }
@@ -1218,141 +977,6 @@ function buildPageElement(pageData){
   return div;
 }
 
-async function getFaceCropUrl(entryInfo, relBox){
-  try {
-    const file = await entryInfo.handle.getFile();
-    const blob = await toDisplayableBlob(file, entryInfo.name);
-    if (!blob) return null;
-    const bitmap = await createImageBitmap(blob);
-    const W = bitmap.width, H = bitmap.height;
-    const boxW = relBox.width * W, boxH = relBox.height * H;
-    const boxX = relBox.x * W, boxY = relBox.y * H;
-    const pad = Math.max(boxW, boxH) * 0.4;
-    const sx = Math.max(0, boxX - pad);
-    const sy = Math.max(0, boxY - pad);
-    const sw = Math.min(W - sx, boxW + pad * 2);
-    const sh = Math.min(H - sy, boxH + pad * 2);
-    const size = 240;
-    const c = document.createElement('canvas');
-    c.width = size; c.height = size;
-    const ctx = c.getContext('2d');
-    const scale = Math.max(size / sw, size / sh);
-    const drawW = sw * scale, drawH = sh * scale;
-    const dx = (size - drawW) / 2, dy = (size - drawH) / 2;
-    ctx.drawImage(bitmap, sx, sy, sw, sh, dx, dy, drawW, drawH);
-    bitmap.close();
-    return await new Promise(res => c.toBlob(b => res(b ? URL.createObjectURL(b) : null), 'image/jpeg', 0.85));
-  } catch(e){ return null; }
-}
-
-function buildPersonPageElement(pageData, sec){
-  const outer = document.createElement('div');
-  outer.className = 'page';
-  outer.style.gridTemplateColumns = 'repeat(auto-fill, minmax(150px, 1fr))';
-  outer.style.gridAutoRows = '150px';
-  outer.style.alignContent = 'start';
-
-  pageData.photos.forEach((entryInfo) => {
-    const cell = document.createElement('div');
-    cell.className = 'photo-cell';
-    const img = document.createElement('img');
-    img.addEventListener('click', (e) => { e.stopPropagation(); openLightbox(entryInfo); });
-    cell.appendChild(img);
-    const statusEl = document.createElement('div');
-    statusEl.className = 'cell-status';
-    statusEl.textContent = '⏳';
-    cell.appendChild(statusEl);
-    const delBtn = document.createElement('button');
-    delBtn.className = 'del-btn';
-    delBtn.textContent = '🗑️';
-    delBtn.title = t('deletePhotoTitle');
-    delBtn.addEventListener('click', (e) => { e.stopPropagation(); deletePhoto(entryInfo); });
-    cell.appendChild(delBtn);
-    outer.appendChild(cell);
-
-    queuePageLoad(async () => {
-      const relBox = sec && sec.faceBoxes ? sec.faceBoxes[entryInfo.path] : null;
-      let url = relBox ? await getFaceCropUrl(entryInfo, relBox) : null;
-      if (!url){
-        try {
-          const file = await entryInfo.handle.getFile();
-          const blob = await toPageBlob(file, entryInfo.name);
-          if (blob) url = URL.createObjectURL(blob);
-        } catch(e){}
-      }
-      if (url){
-        activeObjectUrls.push(url);
-        img.onload = () => { statusEl.remove(); };
-        img.onerror = () => { statusEl.textContent = '⚠️'; statusEl.classList.add('cell-status-failed'); };
-        img.src = url;
-      } else {
-        statusEl.textContent = '⚠️';
-        statusEl.classList.add('cell-status-failed');
-      }
-    });
-  });
-
-  return outer;
-}
-
-let currentFaceCacheId = null;
-async function deletePersonGroup(name){
-  const target = sections.find(s => s.name === name);
-  sections = sections.filter(s => s.name !== name);
-  buildPages();
-  renderSectionPills();
-  currentPageIndex = 0;
-  renderPage(currentPageIndex, null);
-  if (currentFaceCacheId && target){
-    try {
-      const cached = await getFaceGroupCache(currentFaceCacheId);
-      if (cached){
-        const targetKey = target.photos.map(p => p.path).sort().join('|');
-        cached.groups = cached.groups.filter(g => (g.photoPaths||[]).slice().sort().join('|') !== targetKey);
-        await setFaceGroupCache(cached);
-      }
-    } catch(e){}
-  }
-}
-
-async function renamePersonSection(sec, newName){
-  sec.name = newName;
-  const albumId = currentAlbumRecord ? currentAlbumRecord.id : 'x';
-  const personId = sec.personId || (albumId + '::' + newName + '::' + Date.now());
-  sec.personId = personId;
-  const namedPeople = await getNamedPeople(albumId);
-  const existing = namedPeople.find(p => p.id === personId);
-  const record = existing || {
-    id: personId,
-    albumId,
-    name: newName,
-    avgDescriptor: sec.avgDescriptor,
-    sightings: [],
-    sightingCount: sec.photos.length
-  };
-  record.name = newName;
-  const existingKeys = new Set((record.sightings||[]).map(s => s.sectionName + '::' + s.path));
-  const realSectionName = sec.sourceSectionName || sec.name;
-  sec.photos.forEach(p => {
-    const key = realSectionName + '::' + p.path;
-    if (!existingKeys.has(key)){
-      record.sightings.push({sectionName: realSectionName, path: p.path, relBox: sec.faceBoxes[p.path]});
-      existingKeys.add(key);
-    }
-  });
-  await setNamedPerson(record).catch(()=>{});
-  buildPages();
-  renderSectionPills();
-  renderPage(currentPageIndex, null);
-}
-
-function resolveEntryInfo(sectionName, path){
-  const secs = folderSections || sections;
-  const sec = secs.find(s => s.name === sectionName);
-  if (!sec) return null;
-  return sec.photos.find(p => p.path === path) || null;
-}
-
 function renderPage(index, direction){
   if (index < 0 || index >= allPages.length) return;
   currentPageIndex = index;
@@ -1361,9 +985,7 @@ function renderPage(index, direction){
   activeObjectUrls.forEach(u => URL.revokeObjectURL(u));
   activeObjectUrls = [];
 
-  const pageData = allPages[index];
-  const sec = groupByPersonActive ? sections.find(s => s.name === pageData.sectionName) : null;
-  const newPageEl = sec ? buildPersonPageElement(pageData, sec) : buildPageElement(pageData);
+  const newPageEl = buildPageElement(allPages[index]);
   if (direction === 'next') newPageEl.classList.add('enter-next');
   if (direction === 'prev') newPageEl.classList.add('enter-prev');
   wrap.appendChild(newPageEl);
@@ -1541,14 +1163,10 @@ async function deletePhoto(entryInfo){
     alert(t('failDelete'));
     return;
   }
-  const secsWithPhoto = sections.filter(s => s.photos.includes(entryInfo));
-  const sectionName = secsWithPhoto.length ? secsWithPhoto[0].name : null;
-  [sections, folderSections].forEach(arr => {
-    if (!arr) return;
-    arr.forEach(s => { s.photos = s.photos.filter(p => p !== entryInfo); });
-  });
+  const sec = sections.find(s => s.photos.includes(entryInfo));
+  const sectionName = sec ? sec.name : null;
+  if (sec) sec.photos = sec.photos.filter(p => p !== entryInfo);
   sections = sections.filter(s => s.photos.length);
-  if (folderSections) folderSections = folderSections.filter(s => s.photos.length);
   buildPages();
   renderSectionPills();
   const newIndex = Math.min(currentPageIndex, allPages.length - 1);
@@ -1570,6 +1188,10 @@ document.getElementById('backBtn').addEventListener('click', () => {
   window.location.href = 'index.html';
 });
 
+document.getElementById('coverHomeBtn').addEventListener('click', () => {
+  window.location.href = 'index.html';
+});
+
 document.getElementById('musicToggleBtn').addEventListener('click', () => {
   if (!bgMusic.src){ pickMusicDuringAlbum(); return; }
   if (bgMusic.paused){ bgMusic.play(); document.getElementById('musicToggleBtn').classList.add('on'); }
@@ -1578,20 +1200,6 @@ document.getElementById('musicToggleBtn').addEventListener('click', () => {
 document.getElementById('volSlider').addEventListener('input', (e) => {
   bgMusic.volume = parseFloat(e.target.value);
 });
-
-// Κουμπί για αλλαγή μουσικού κομματιού όποτε θέλει, ακόμα κι όταν παίζει ήδη ένα
-(function(){
-  const musicBtn = document.getElementById('musicToggleBtn');
-  if (!musicBtn || !musicBtn.parentNode) return;
-  const changeBtn = document.createElement('button');
-  changeBtn.className = 'tool-btn';
-  changeBtn.id = 'changeMusicBtn';
-  changeBtn.textContent = '🔀';
-  changeBtn.title = currentLang === 'el' ? 'Άλλαξε το μουσικό κομμάτι' : 'Change the music track';
-  changeBtn.addEventListener('click', (e) => { e.stopPropagation(); pickMusicDuringAlbum(); });
-  musicBtn.parentNode.insertBefore(changeBtn, musicBtn.nextSibling);
-})();
-
 async function pickMusicDuringAlbum(){
   try {
     const [handle] = await window.showOpenFilePicker({
@@ -1650,249 +1258,6 @@ applyStaticTranslations();
   });
   window.addEventListener('scroll', function() {
     btn.style.display = window.scrollY > 300 ? 'flex' : 'none';
-  });
-})();
-
-// Ομαδοποίηση ανά πρόσωπο — κουμπί μέσα στις Ρυθμίσεις, δουλεύει πάνω στον τρέχοντα φάκελο
-function getMinPhotosPerPerson(){
-  const v = parseInt(localStorage.getItem('flipAlbumMinFaceCount') || '5', 10);
-  return (isNaN(v) || v < 1) ? 5 : v;
-}
-(function() {
-  const panel = document.getElementById('settingsPanel');
-  if (!panel) return;
-  const row = document.createElement('div');
-  row.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.1);';
-  const btn = document.createElement('button');
-  btn.id = 'groupByPersonBtn';
-  btn.className = 'small-btn';
-  btn.textContent = t('groupByPerson');
-  btn.style.cssText = 'width:100%;';
-  const status = document.createElement('div');
-  status.id = 'personGroupStatus';
-  status.style.cssText = 'font-size:0.85em;opacity:0.75;margin-top:6px;min-height:1.2em;';
-  const minRow = document.createElement('div');
-  minRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:10px;font-size:0.85em;';
-  const minLabel = document.createElement('span');
-  minLabel.textContent = t('minPhotosLabel');
-  const minInput = document.createElement('input');
-  minInput.type = 'number';
-  minInput.min = '1';
-  minInput.max = '50';
-  minInput.value = String(getMinPhotosPerPerson());
-  minInput.style.cssText = 'width:56px;padding:4px;border-radius:6px;border:1px solid rgba(0,0,0,.2);';
-  minInput.addEventListener('change', () => {
-    let v = parseInt(minInput.value, 10);
-    if (isNaN(v) || v < 1) v = 1;
-    minInput.value = String(v);
-    localStorage.setItem('flipAlbumMinFaceCount', String(v));
-  });
-  minRow.appendChild(minLabel);
-  minRow.appendChild(minInput);
-  row.appendChild(btn);
-  row.appendChild(status);
-  row.appendChild(minRow);
-  panel.appendChild(row);
-
-  function refreshLabel(){
-    if (groupByPersonActive){ btn.textContent = t('groupByPersonBack'); return; }
-    const currentSecName = allPages[currentPageIndex] ? allPages[currentPageIndex].sectionName : null;
-    const src = (folderSections || sections).find(s => s.name === currentSecName);
-    btn.textContent = src ? t('groupByPersonThisFolder', src.photos.length) : t('groupByPerson');
-  }
-  document.getElementById('settingsBtn').addEventListener('click', refreshLabel);
-
-  btn.addEventListener('click', async () => {
-    if (groupByPersonActive){
-      sections = folderSections;
-      groupByPersonActive = false;
-      currentFaceCacheId = null;
-      status.textContent = '';
-      buildPages();
-      renderSectionPills();
-      currentPageIndex = 0;
-      renderPage(currentPageIndex, null);
-      refreshLabel();
-      return;
-    }
-    if (!folderSections) folderSections = sections;
-    const currentSecName = allPages[currentPageIndex] ? allPages[currentPageIndex].sectionName : null;
-    const sourceSection = folderSections.find(s => s.name === currentSecName) || folderSections[0];
-    if (!sourceSection) return;
-    btn.disabled = true;
-    try {
-      await ensureFaceApi(status); // χρειάζεται πάντα, ακόμα κι όταν το αποτέλεσμα έρχεται από τη μνήμη
-      const albumId = currentAlbumRecord ? currentAlbumRecord.id : 'x';
-      const FACE_ALGO_VERSION = 'v5';
-      const cacheId = FACE_ALGO_VERSION + '::' + albumId + '::' + sourceSection.name;
-      currentFaceCacheId = cacheId;
-      const currentPaths = sourceSection.photos.map(p => p.path).sort();
-      const cached = await getFaceGroupCache(cacheId);
-      const cacheMatches = cached && cached.photoPaths && cached.photoPaths.length === currentPaths.length
-        && cached.photoPaths.every((p,i) => p === currentPaths[i]);
-      let rawClusters;
-      if (cacheMatches){
-        const byPath = {};
-        sourceSection.photos.forEach(p => { byPath[p.path] = p; });
-        rawClusters = cached.groups.map(g => ({
-          photos: g.photoPaths.map(p => byPath[p]).filter(Boolean),
-          faceBoxes: g.faceBoxes,
-          avgDescriptor: g.avgDescriptor
-        }));
-      } else {
-        rawClusters = await computePersonSections(status, sourceSection.photos);
-        setFaceGroupCache({
-          id: cacheId,
-          photoPaths: currentPaths,
-          groups: rawClusters.map(c => ({photoPaths: c.photos.map(p => p.path), faceBoxes: c.faceBoxes, avgDescriptor: c.avgDescriptor})),
-          savedAt: Date.now()
-        }).catch(()=>{});
-      }
-
-      // Αναγνώριση ονομασμένων ατόμων από άλλους φακέλους του ίδιου άλμπουμ
-      const namedPeople = await getNamedPeople(albumId);
-      const NAME_MATCH_THRESHOLD = 0.58;
-      const usedPersonIds = new Set();
-      const matchedGroups = rawClusters.map(c => {
-        let best = null, bestDist = Infinity;
-        namedPeople.forEach(p => {
-          if (usedPersonIds.has(p.id) || !p.avgDescriptor) return;
-          const d = faceapi.euclideanDistance(Float32Array.from(c.avgDescriptor), Float32Array.from(p.avgDescriptor));
-          if (d < bestDist){ bestDist = d; best = p; }
-        });
-        if (best && bestDist < NAME_MATCH_THRESHOLD){
-          usedPersonIds.add(best.id);
-          return {photos: c.photos, faceBoxes: c.faceBoxes, avgDescriptor: c.avgDescriptor, name: best.name, personId: best.id};
-        }
-        return {photos: c.photos, faceBoxes: c.faceBoxes, avgDescriptor: c.avgDescriptor, name: null, personId: null};
-      });
-
-      // Ενημέρωση της λίστας φωτογραφιών κάθε ονομασμένου ατόμου
-      for (const g of matchedGroups){
-        if (!g.personId) continue;
-        const person = namedPeople.find(p => p.id === g.personId);
-        if (!person) continue;
-        person.sightings = person.sightings || [];
-        const existingKeys = new Set(person.sightings.map(s => s.sectionName + '::' + s.path));
-        const newSightings = g.photos
-          .filter(p => !existingKeys.has(sourceSection.name + '::' + p.path))
-          .map(p => ({sectionName: sourceSection.name, path: p.path, relBox: g.faceBoxes[p.path]}));
-        if (newSightings.length){
-          const w1 = person.sightingCount || person.sightings.length || 1;
-          const w2 = g.photos.length;
-          person.avgDescriptor = person.avgDescriptor.map((v,i) => (v*w1 + g.avgDescriptor[i]*w2) / (w1+w2));
-          person.sightings = person.sightings.concat(newSightings);
-          person.sightingCount = w1 + w2;
-          await setNamedPerson(person).catch(()=>{});
-        }
-      }
-
-      // Εφαρμογή του ελάχιστου αριθμού φωτογραφιών· τα ονομασμένα άτομα πάντα εμφανίζονται
-      const minCount = getMinPhotosPerPerson();
-      let genericIdx = 0;
-      const newSections = matchedGroups
-        .filter(g => g.personId || g.photos.length >= minCount)
-        .map(g => {
-          if (g.name) return {name: g.name, photos: g.photos, faceBoxes: g.faceBoxes, avgDescriptor: g.avgDescriptor, personId: g.personId, sourceSectionName: sourceSection.name};
-          genericIdx++;
-          return {name: `${t('personLabel')} ${genericIdx}`, photos: g.photos, faceBoxes: g.faceBoxes, avgDescriptor: g.avgDescriptor, personId: null, sourceSectionName: sourceSection.name};
-        });
-
-      sections = newSections;
-      groupByPersonActive = true;
-      btn.textContent = t('groupByPersonBack');
-      status.textContent = newSections.length ? '' : t('faceGroupNoFaces');
-      buildPages();
-      renderSectionPills();
-      currentPageIndex = 0;
-      renderPage(currentPageIndex, null);
-    } catch(e){
-      console.error('Face grouping error:', e);
-      status.textContent = t('faceGroupError') + ' [' + (e && (e.message || e.toString())) + ']';
-    } finally {
-      btn.disabled = false;
-    }
-  });
-})();
-
-// «Τα Άτομά μου» — λίστα ονομασμένων ατόμων, ανοίγει ακριβώς κάτω από το κουμπί
-(function(){
-  const panel = document.getElementById('settingsPanel');
-  if (!panel) return;
-  const peopleBtn = document.createElement('button');
-  peopleBtn.className = 'small-btn';
-  peopleBtn.textContent = t('myPeopleBtn');
-  peopleBtn.style.cssText = 'width:100%;margin-top:10px;';
-  panel.appendChild(peopleBtn);
-
-  const listWrap = document.createElement('div');
-  listWrap.style.cssText = 'display:none;margin-top:8px;font-size:0.8em;max-height:280px;overflow:auto;';
-  panel.appendChild(listWrap);
-
-  let expanded = false;
-
-  async function showList(){
-    listWrap.innerHTML = '';
-    const albumId = currentAlbumRecord ? currentAlbumRecord.id : 'x';
-    const people = await getNamedPeople(albumId);
-    if (!people.length){
-      const empty = document.createElement('div');
-      empty.textContent = t('myPeopleEmpty');
-      empty.style.cssText = 'padding:6px 2px;opacity:.85;';
-      listWrap.appendChild(empty);
-      return;
-    }
-    people.sort((a,b) => (b.sightings||[]).length - (a.sightings||[]).length);
-    people.forEach(p => {
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 2px;border-bottom:1px solid rgba(255,255,255,.12);';
-      const nameBtn = document.createElement('button');
-      nameBtn.textContent = `${p.name} (${(p.sightings||[]).length})`;
-      nameBtn.style.cssText = 'background:none;border:none;color:inherit;font-size:1em;cursor:pointer;text-align:left;flex:1;padding:0;';
-      nameBtn.addEventListener('click', () => openPersonInAlbum(p));
-      const delBtn = document.createElement('button');
-      delBtn.textContent = '🗑️';
-      delBtn.style.cssText = 'background:none;border:none;color:inherit;cursor:pointer;font-size:1em;padding:0;';
-      delBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (confirm(t('deleteNamedPersonConfirm', p.name))){
-          await deleteNamedPerson(p.id).catch(()=>{});
-          showList();
-        }
-      });
-      row.appendChild(nameBtn);
-      row.appendChild(delBtn);
-      listWrap.appendChild(row);
-    });
-  }
-
-  function openPersonInAlbum(person){
-    const photos = [];
-    const faceBoxes = {};
-    (person.sightings || []).forEach(s => {
-      const entryInfo = resolveEntryInfo(s.sectionName, s.path);
-      if (entryInfo && photos.indexOf(entryInfo) === -1){
-        photos.push(entryInfo);
-        faceBoxes[entryInfo.path] = s.relBox;
-      }
-    });
-    if (!folderSections) folderSections = sections;
-    sections = [{name: person.name, photos, faceBoxes, avgDescriptor: person.avgDescriptor, personId: person.id}];
-    groupByPersonActive = true;
-    currentFaceCacheId = null;
-    buildPages();
-    renderSectionPills();
-    currentPageIndex = 0;
-    renderPage(currentPageIndex, null);
-    document.getElementById('settingsPanel').style.display = 'none';
-    expanded = false;
-    listWrap.style.display = 'none';
-  }
-
-  peopleBtn.addEventListener('click', () => {
-    expanded = !expanded;
-    listWrap.style.display = expanded ? 'block' : 'none';
-    if (expanded) showList();
   });
 })();
 </script>
